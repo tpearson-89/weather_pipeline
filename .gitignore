@@ -9,3 +9,9 @@ __pycache__/
 # Ignore any temporary data files
 *.log
 *.csv
+
+# Ignore Terraform local directories and state
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
