@@ -20,7 +20,7 @@ pipeline {
             steps {
                 echo "Running weather ingestion script..."
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
-                    bat 'python weather_pipeline\\src\\fetch_weather.py'
+                    bat "python src\\fetch_weather.py"
                 }
             }
         }
@@ -29,24 +29,26 @@ pipeline {
             steps {
                 echo "Running AWS Glue ETL job: weather-pipeline-tp-etl-job"
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
-                    powershell '''
-                    $jobName = "weather-pipeline-tp-etl-job"
-                    $jobRunId = aws glue start-job-run --job-name $jobName --query "JobRunId" --output text
-                    Write-Host "Glue Job started with JobRunId: $jobRunId"
+                    bat """
+                    REM Start Glue job and get JobRunId
+                    for /f "tokens=*" %%i in ('aws glue start-job-run --job-name weather-pipeline-tp-etl-job --query "JobRunId" --output text') do set JOB_RUN_ID=%%i
+                    echo Glue Job started with JobRunId: !JOB_RUN_ID!
 
-                    do {
-                        Start-Sleep -Seconds 10
-                        $status = aws glue get-job-run --job-name $jobName --run-id $jobRunId --query "JobRun.JobRunState" --output text
-                        Write-Host "Current Glue job status: $status"
-                    } while ($status -eq "RUNNING" -or $status -eq "STARTING")
+                    REM Poll until job finishes
+                    :glueLoop
+                    for /f "tokens=*" %%s in ('aws glue get-job-run --job-name weather-pipeline-tp-etl-job --run-id !JOB_RUN_ID! --query "JobRun.JobRunState" --output text') do set STATUS=%%s
+                    echo Current Glue job status: !STATUS!
+                    if "!STATUS!"=="RUNNING" timeout /t 10 & goto glueLoop
+                    if "!STATUS!"=="STARTING" timeout /t 10 & goto glueLoop
 
-                    if ($status -eq "SUCCEEDED") {
-                        Write-Host "Glue job completed successfully!"
-                    } else {
-                        Write-Error "Glue job FAILED with status: $status"
-                        exit 1
-                    }
-                    '''
+                    REM Check final status
+                    if "!STATUS!"=="SUCCEEDED" (
+                        echo Glue job completed successfully!
+                    ) else (
+                        echo Glue job FAILED with status: !STATUS!
+                        exit /b 1
+                    )
+                    """
                 }
             }
         }
@@ -55,37 +57,33 @@ pipeline {
             steps {
                 echo "Running Athena query on ${ATHENA_DB}..."
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
-                    powershell '''
-                    $athenaDb = "${env.ATHENA_DB}"
-                    $athenaOutput = "${env.ATHENA_OUTPUT}"
-                    $query = "SELECT city, country, datetime_utc, temperature_celsius, weather_main FROM $athenaDb.weather_data ORDER BY datetime_utc DESC LIMIT 30;"
+                    bat """
+                    REM Define query
+                    set QUERY=SELECT city, country, datetime_utc, temperature_celsius, weather_main FROM ${ATHENA_DB}.weather_data ORDER BY datetime_utc DESC LIMIT 30;
 
-                    $queryExecutionId = aws athena start-query-execution `
-                        --query-string "$query" `
-                        --query-execution-context Database=$athenaDb `
-                        --result-configuration OutputLocation=$athenaOutput `
-                        --output text --query "QueryExecutionId"
+                    REM Start Athena query and get execution ID
+                    for /f "tokens=*" %%q in ('aws athena start-query-execution --query-string "!QUERY!" --query-execution-context Database=${ATHENA_DB} --result-configuration OutputLocation=${ATHENA_OUTPUT} --output text --query "QueryExecutionId"') do set QUERY_EXECUTION_ID=%%q
+                    echo Athena Query started with ID: !QUERY_EXECUTION_ID!
 
-                    Write-Host "Athena Query started with ID: $queryExecutionId"
+                    REM Poll until query finishes
+                    :athenaLoop
+                    for /f "tokens=*" %%s in ('aws athena get-query-execution --query-execution-id !QUERY_EXECUTION_ID! --query "QueryExecution.Status.State" --output text') do set STATUS=%%s
+                    echo Current Athena query status: !STATUS!
+                    if "!STATUS!"=="RUNNING" timeout /t 5 & goto athenaLoop
+                    if "!STATUS!"=="QUEUED" timeout /t 5 & goto athenaLoop
 
-                    do {
-                        Start-Sleep -Seconds 5
-                        $status = aws athena get-query-execution --query-execution-id $queryExecutionId --query "QueryExecution.Status.State" --output text
-                        Write-Host "Current Athena query status: $status"
-                    } while ($status -eq "RUNNING" -or $status -eq "QUEUED")
-
-                    if ($status -eq "SUCCEEDED") {
-                        Write-Host "Athena query completed successfully!"
-                        Write-Host "Results available at: $athenaOutput$queryExecutionId.csv"
-                    } else {
-                        Write-Error "Athena query FAILED with status: $status"
-                        exit 1
-                    }
-                    '''
+                    REM Check final status
+                    if "!STATUS!"=="SUCCEEDED" (
+                        echo Athena query completed successfully!
+                        echo Results available at: ${ATHENA_OUTPUT}!QUERY_EXECUTION_ID!.csv
+                    ) else (
+                        echo Athena query FAILED with status: !STATUS!
+                        exit /b 1
+                    )
+                    """
                 }
             }
         }
-
     }
 
     post {
