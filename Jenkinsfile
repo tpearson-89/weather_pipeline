@@ -19,10 +19,8 @@ pipeline {
         stage('Run Weather Ingestion Script') {
             steps {
                 echo "Running weather ingestion script..."
-                withAWS(credentials: 'aws-jenkins-creds', region: "${AWS_DEFAULT_REGION}") {
-                    sh '''
-                    python3 weather_pipeline/src/fetch_weather.py
-                    '''
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
+                    bat 'python weather_pipeline\\src\\fetch_weather.py'
                 }
             }
         }
@@ -30,24 +28,24 @@ pipeline {
         stage('Run Glue ETL job') {
             steps {
                 echo "Running AWS Glue ETL job: weather-pipeline-tp-etl-job"
-                withAWS(credentials: 'aws-jenkins-creds', region: "${AWS_DEFAULT_REGION}") {
-                    sh '''
-                    JOB_RUN_ID=$(aws glue start-job-run --job-name weather-pipeline-tp-etl-job --query 'JobRunId' --output text)
-                    echo "Glue Job started with JobRunId: $JOB_RUN_ID"
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
+                    powershell '''
+                    $jobName = "weather-pipeline-tp-etl-job"
+                    $jobRunId = aws glue start-job-run --job-name $jobName --query "JobRunId" --output text
+                    Write-Host "Glue Job started with JobRunId: $jobRunId"
 
-                    STATUS="RUNNING"
-                    while [ "$STATUS" == "RUNNING" ] || [ "$STATUS" == "STARTING" ]; do
-                        sleep 10
-                        STATUS=$(aws glue get-job-run --job-name weather-pipeline-tp-etl-job --run-id $JOB_RUN_ID --query 'JobRun.JobRunState' --output text)
-                        echo "Current Glue job status: $STATUS"
-                    done
+                    do {
+                        Start-Sleep -Seconds 10
+                        $status = aws glue get-job-run --job-name $jobName --run-id $jobRunId --query "JobRun.JobRunState" --output text
+                        Write-Host "Current Glue job status: $status"
+                    } while ($status -eq "RUNNING" -or $status -eq "STARTING")
 
-                    if [ "$STATUS" == "SUCCEEDED" ]; then
-                        echo "Glue job completed successfully!"
-                    else
-                        echo "Glue job FAILED with status: $STATUS"
+                    if ($status -eq "SUCCEEDED") {
+                        Write-Host "Glue job completed successfully!"
+                    } else {
+                        Write-Error "Glue job FAILED with status: $status"
                         exit 1
-                    fi
+                    }
                     '''
                 }
             }
@@ -56,37 +54,38 @@ pipeline {
         stage('Run Athena Query') {
             steps {
                 echo "Running Athena query on ${ATHENA_DB}..."
-                withAWS(credentials: 'aws-jenkins-creds', region: "${AWS_DEFAULT_REGION}") {
-                    sh '''
-                    QUERY="SELECT city, country, datetime_utc, temperature_celsius, weather_main FROM ${ATHENA_DB}.weather_data ORDER BY datetime_utc DESC LIMIT 30;"
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-jenkins-creds']]) {
+                    powershell '''
+                    $athenaDb = "${env.ATHENA_DB}"
+                    $athenaOutput = "${env.ATHENA_OUTPUT}"
+                    $query = "SELECT city, country, datetime_utc, temperature_celsius, weather_main FROM $athenaDb.weather_data ORDER BY datetime_utc DESC LIMIT 30;"
 
-                    QUERY_EXECUTION_ID=$(aws athena start-query-execution \
-                        --query-string "$QUERY" \
-                        --query-execution-context Database=${ATHENA_DB} \
-                        --result-configuration OutputLocation=${ATHENA_OUTPUT} \
-                        --output text --query 'QueryExecutionId')
+                    $queryExecutionId = aws athena start-query-execution `
+                        --query-string "$query" `
+                        --query-execution-context Database=$athenaDb `
+                        --result-configuration OutputLocation=$athenaOutput `
+                        --output text --query "QueryExecutionId"
 
-                    echo "Athena Query started with ID: $QUERY_EXECUTION_ID"
+                    Write-Host "Athena Query started with ID: $queryExecutionId"
 
-                    # Poll for Athena query completion
-                    STATUS="RUNNING"
-                    while [ "$STATUS" == "RUNNING" ] || [ "$STATUS" == "QUEUED" ]; do
-                        sleep 5
-                        STATUS=$(aws athena get-query-execution --query-execution-id $QUERY_EXECUTION_ID --query 'QueryExecution.Status.State' --output text)
-                        echo "Current Athena query status: $STATUS"
-                    done
+                    do {
+                        Start-Sleep -Seconds 5
+                        $status = aws athena get-query-execution --query-execution-id $queryExecutionId --query "QueryExecution.Status.State" --output text
+                        Write-Host "Current Athena query status: $status"
+                    } while ($status -eq "RUNNING" -or $status -eq "QUEUED")
 
-                    if [ "$STATUS" == "SUCCEEDED" ]; then
-                        echo "Athena query completed successfully!"
-                        echo "Results available at: ${ATHENA_OUTPUT}$QUERY_EXECUTION_ID.csv"
-                    else
-                        echo "Athena query FAILED with status: $STATUS"
+                    if ($status -eq "SUCCEEDED") {
+                        Write-Host "Athena query completed successfully!"
+                        Write-Host "Results available at: $athenaOutput$queryExecutionId.csv"
+                    } else {
+                        Write-Error "Athena query FAILED with status: $status"
                         exit 1
-                    fi
+                    }
                     '''
                 }
             }
         }
+
     }
 
     post {
