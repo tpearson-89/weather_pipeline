@@ -36,11 +36,15 @@ if 'name' in raw_df.columns:
 else:
     raw_df = raw_df.withColumn("city", lit("unknown"))
 
+# Ensure 'dt' exists for timestamp conversion
+if 'dt' not in raw_df.columns:
+    raw_df = raw_df.withColumn("dt", lit(0))
+
 # Flatten JSON and select relevant fields
 transformed_df = raw_df.select(
     col("city"),
     coalesce(col("sys").getField("country"), lit("unknown")).alias("country"),
-    from_unixtime(coalesce(col("dt"), lit(0))).alias("datetime_utc"),
+    from_unixtime(coalesce(col("dt"), lit(0)).cast("long")).cast("timestamp").alias("datetime_utc"),
     coalesce(col("weather").getItem(0).getField("main"), lit("unknown")).alias("weather_main"),
     coalesce(col("weather").getItem(0).getField("description"), lit("unknown")).alias("weather_description"),
     coalesce(col("main").getField("temp"), lit(None)).alias("temperature_celsius"),
