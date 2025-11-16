@@ -7,6 +7,9 @@ pipeline {
         ATHENA_DB = 'weather_db'                       // Athena database
         ATHENA_OUTPUT = 's3://weather-pipeline-tp-athena/' // S3 bucket for Athena query results
         GLUE_JOB_NAME = 'weather-pipeline-tp-etl-job' // Glue ETL job name
+        S3_BUCKET = 'weather-pipeline-tp-etl-job' // S3 bucket for raw API data
+        CITY = 'Plymouth,GB' // OpenWeather API City
+        UNITS = 'metric'  // Units of temperature
     }
 
     stages {
