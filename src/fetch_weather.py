@@ -21,7 +21,7 @@ load_dotenv("key.env")
 
 # === Configuration from local ENV file ===
 API_KEY = os.getenv("OWM_API_KEY")
-CITY = os.getenv("CITY", "Plymouth")
+CITY = os.getenv("CITY", "Plymouth,GB")
 BUCKET_NAME = os.getenv("S3_BUCKET")
 UNITS = os.getenv("UNITS", "metric")
 
