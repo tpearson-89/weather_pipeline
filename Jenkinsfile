@@ -19,7 +19,7 @@ pipeline {
         stage('Run Weather Ingestion Script') {
             steps {
                 echo "Running weather ingestion script..."
-                withCredentials([usernamePassword(credentialsId: 'aws-jenkins-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                withAWS(credentials: 'aws-jenkins-creds', region: "${AWS_DEFAULT_REGION}") {
                     sh '''
                     python3 weather_pipeline/src/fetch_weather.py
                     '''
@@ -30,7 +30,7 @@ pipeline {
         stage('Run Glue ETL job') {
             steps {
                 echo "Running AWS Glue ETL job: weather-pipeline-tp-etl-job"
-                withCredentials([usernamePassword(credentialsId: 'aws-jenkins-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                withAWS(credentials: 'aws-jenkins-creds', region: "${AWS_DEFAULT_REGION}") {
                     sh '''
                     JOB_RUN_ID=$(aws glue start-job-run --job-name weather-pipeline-tp-etl-job --query 'JobRunId' --output text)
                     echo "Glue Job started with JobRunId: $JOB_RUN_ID"
@@ -56,7 +56,7 @@ pipeline {
         stage('Run Athena Query') {
             steps {
                 echo "Running Athena query on ${ATHENA_DB}..."
-                withCredentials([usernamePassword(credentialsId: 'aws-jenkins-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                withAWS(credentials: 'aws-jenkins-creds', region: "${AWS_DEFAULT_REGION}") {
                     sh '''
                     QUERY="SELECT city, country, datetime_utc, temperature_celsius, weather_main FROM ${ATHENA_DB}.weather_data ORDER BY datetime_utc DESC LIMIT 30;"
 
