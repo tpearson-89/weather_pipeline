@@ -34,10 +34,18 @@ pipeline {
         stage('Run Weather Ingestion Script') {
             steps {
                 echo "Running weather ingestion script..."
-                withCredentials([[ 
-                    $class: 'AmazonWebServicesCredentialsBinding', 
-                    credentialsId: 'aws-jenkins-creds' 
-                ]]) {
+                // Bind both AWS credentials and OpenWeatherMap API key
+                withCredentials([
+                    [
+                        $class: 'AmazonWebServicesCredentialsBinding',
+                        credentialsId: 'aws-jenkins-creds'
+                    ],
+                    [
+                        $class: 'StringBinding',
+                        credentialsId: 'owm-api-key',
+                        variable: 'OWM_API_KEY'
+                    ]
+                ]) {
                     // Run Python script to fetch weather and upload to S3
                     bat 'python src\\fetch_weather.py'
                 }
