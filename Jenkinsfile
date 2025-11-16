@@ -60,32 +60,38 @@ pipeline {
             steps {
                 echo "Starting AWS Glue ETL job..."
                 withAWS(credentials: 'aws-jenkins-creds', region: "${AWS_DEFAULT_REGION}") {
-                    // Use Windows batch script to start Glue job and poll status
-                    bat """
-                    @echo off
-                    set JOB_RUN_ID=
-                    for /f "delims=" %%i in ('aws glue start-job-run --job-name ${GLUE_JOB_NAME} --query JobRunId --output text') do set JOB_RUN_ID=%%i
-                    echo Glue Job started with JobRunId: %JOB_RUN_ID%
+                    powershell '''
+                        Write-Host "Starting Glue job..."
 
-                    :poll
-                    set STATUS=
-                    for /f "delims=" %%i in ('aws glue get-job-run --job-name ${GLUE_JOB_NAME} --run-id %JOB_RUN_ID% --query JobRun.JobRunState --output text') do set STATUS=%%i
-                    echo Current Glue job status: %STATUS%
-                    if "%STATUS%"=="RUNNING" (
-                        timeout /t 10
-                        goto poll
-                    ) else if "%STATUS%"=="STARTING" (
-                        timeout /t 10
-                        goto poll
-                    )
+                        # Start the job
+                        $jobRunId = aws glue start-job-run `
+                            --job-name $env:GLUE_JOB_NAME `
+                            --query JobRunId `
+                            --output text
 
-                    if "%STATUS%"=="SUCCEEDED" (
-                        echo Glue job completed successfully!
-                    ) else (
-                        echo Glue job FAILED with status: %STATUS%
-                        exit /b 1
-                    )
-                    """
+                        Write-Host "Glue Job started with JobRunId: $jobRunId"
+
+                        # Poll for status
+                        do {
+                            Start-Sleep -Seconds 10
+
+                            $status = aws glue get-job-run `
+                                --job-name $env:GLUE_JOB_NAME `
+                                --run-id $jobRunId `
+                                --query JobRun.JobRunState `
+                                --output text
+
+                            Write-Host "Current Glue job status: $status"
+
+                        } while ($status -eq "RUNNING" -or $status -eq "STARTING")
+
+                        if ($status -eq "SUCCEEDED") {
+                            Write-Host "Glue job completed successfully!"
+                        } else {
+                            Write-Host "Glue job FAILED with status: $status"
+                            exit 1
+                        }
+                    '''
                 }
             }
         }
