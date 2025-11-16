@@ -10,7 +10,7 @@ ATHENA_OUTPUT = os.environ.get('ATHENA_OUTPUT', 's3://weather-pipeline-tp-athena
 # Athena query
 QUERY = f"""
 SELECT city, country, datetime_utc, temperature_celsius, weather_main
-FROM {ATHENA_DB}.weather_data
+FROM {ATHENA_DB}.weather_clean
 ORDER BY datetime_utc DESC
 LIMIT 30;
 """
