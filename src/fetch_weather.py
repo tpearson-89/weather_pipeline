@@ -17,7 +17,9 @@ from botocore.exceptions import BotoCoreError, ClientError
 from dotenv import load_dotenv
 
 # === Load environment variables from key.env ===
-load_dotenv("key.env")
+dotenv_path = os.path.join(os.getcwd(), "key.env")
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path)
 
 # === Configuration from local ENV file ===
 API_KEY = os.getenv("OWM_API_KEY")
