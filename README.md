@@ -186,7 +186,7 @@ weather_pipeline/
 ├── LICENSE
 ├── README.md
 └── requirements.txt
-
+```
 ---
 
 # Infrastructure Provisioning (Terraform)
