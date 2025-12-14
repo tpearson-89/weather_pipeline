@@ -162,22 +162,23 @@ This project was created to demonstrate my knowledge and ability to utilise:
 
 # Repository Structure
 
+```text
 weather_pipeline/
 │
 ├── logs/
 │
 ├── src/
-│ ├── fetch_weather.py
-│ ├── athena_etl.py
-│ └── glue_etl.py
+│   ├── fetch_weather.py
+│   ├── athena_etl.py
+│   └── glue_etl.py
 │
 ├── terraform/
-│ ├── glue.tf
-│ ├── iam.tf
-│ ├── main.tf
-│ ├── outputs.tf
-│ ├── s3.tf
-│ └── variables.tf
+│   ├── glue.tf
+│   ├── iam.tf
+│   ├── main.tf
+│   ├── outputs.tf
+│   ├── s3.tf
+│   └── variables.tf
 │
 ├── .gitignore
 ├── Jenkinsfile
